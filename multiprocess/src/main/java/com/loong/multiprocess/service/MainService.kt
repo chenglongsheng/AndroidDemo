@@ -10,6 +10,7 @@ import android.os.Looper
 import android.os.Message
 import android.os.Messenger
 import android.util.Log
+import com.loong.multiprocess.constant.MsgConst
 
 /**
  * @author Rosen
@@ -20,6 +21,22 @@ class MainService : Service() {
     companion object {
         private const val TAG = "MainService"
 
+        private var otherMessenger: Messenger? = null
+
+        /**
+         * 发送消息
+         */
+        fun sendMsg(msg: Message) {
+            Log.d(TAG, "sendMsg: msg[$msg] other[$otherMessenger]")
+            otherMessenger?.send(msg)
+        }
+
+        fun goPage(msg: Int) {
+            val message = Message.obtain().apply {
+                what = MsgConst.MAIN2SUB.YSN_DATA
+            }
+            sendMsg(message)
+        }
 
     }
 
@@ -34,10 +51,15 @@ class MainService : Service() {
     private val conn = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             Log.d(TAG, "onServiceConnected: name[$name] service[$service]")
+            // 与子进程服务连接上的时候，初始化对向的messenger
+            if (otherMessenger == null) {
+                otherMessenger = Messenger(service)
+            }
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
             Log.d(TAG, "onServiceDisconnected: name[$name]")
+            otherMessenger = null
             bindOther()
         }
     }
@@ -70,6 +92,15 @@ class MainService : Service() {
 
     private fun handleMsg(msg: Message) {
         Log.d(TAG, "handleMsg: msg[${msg.what}]")
+        when (msg.what) {
+            MsgConst.SUB2MAIN.KILL_SELF -> {
+                android.os.Process.killProcess(android.os.Process.myPid())
+            }
+
+            MsgConst.SUB2MAIN.YSN_DATA -> {
+
+            }
+        }
     }
 
 }
