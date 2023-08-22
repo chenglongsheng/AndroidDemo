@@ -1,14 +1,12 @@
-package cn.cls.demo
+package com.loong.widget.bar
 
 import android.content.Context
 import android.util.AttributeSet
-import android.util.Log
 import android.view.LayoutInflater
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.constraintlayout.widget.ConstraintLayout
-
-private const val TAG = "IndicatorSeekBar"
+import com.loong.widget.R
 
 /**
  * @author Rosen
@@ -33,7 +31,8 @@ class IndicatorSeekBar : ConstraintLayout, SeekBar.OnSeekBarChangeListener {
     }
 
     private fun initView(context: Context) {
-        val view = LayoutInflater.from(context).inflate(R.layout.layout_indicator_seekbar, this)
+        val view = LayoutInflater.from(context)
+            .inflate(R.layout.layout_indicator_seekbar, this)
         seekBar = view.findViewById(R.id.seek_bar)
         progress = view.findViewById(R.id.progress)
         seekBar.setOnSeekBarChangeListener(this)

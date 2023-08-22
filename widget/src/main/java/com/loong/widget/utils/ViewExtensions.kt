@@ -1,6 +1,6 @@
 @file:JvmName("ViewExtensions")
 
-package cn.cls.demo.utils
+package com.loong.widget.utils
 
 import android.view.View
 import androidx.annotation.ColorInt

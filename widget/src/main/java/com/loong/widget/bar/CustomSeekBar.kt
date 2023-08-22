@@ -1,4 +1,4 @@
-package cn.cls.demo
+package com.loong.widget.bar
 
 import android.content.Context
 import android.graphics.Canvas
@@ -16,11 +16,12 @@ import androidx.core.view.marginBottom
 import androidx.core.view.marginLeft
 import androidx.core.view.marginRight
 import androidx.core.view.marginTop
-import cn.cls.demo.utils.getColor
+import com.loong.widget.R
+import com.loong.widget.utils.getColor
 import kotlin.math.pow
 import kotlin.math.sqrt
 
-private const val TAG = "CustomSeekView"
+private const val TAG = "CustomSeekBar"
 
 /**
  * @author Rosen
@@ -94,7 +95,10 @@ class CustomSeekBar : View {
     }
 
     private fun initDefault(attrs: AttributeSet?) {
-        val typedArray = context.obtainStyledAttributes(attrs, R.styleable.CustomSeekBar)
+        val typedArray = context.obtainStyledAttributes(
+            attrs,
+            R.styleable.CustomSeekBar
+        )
         bgStartColor =
             typedArray.getColor(R.styleable.CustomSeekBar_bgStartColor, getColor(R.color.bg_start))
         bgEndColor =
@@ -118,7 +122,10 @@ class CustomSeekBar : View {
         mTextPaint.textSize =
             typedArray.getDimension(R.styleable.CustomSeekBar_seekTextSize, sp2px(40f))
         seekText = typedArray.getString(R.styleable.CustomSeekBar_seekText) ?: ""
-        seekTextColor = typedArray.getColor(R.styleable.CustomSeekBar_seekTextColor, Color.WHITE)
+        seekTextColor = typedArray.getColor(
+            R.styleable.CustomSeekBar_seekTextColor,
+            Color.WHITE
+        )
         textLeft =
             typedArray.getDimension(R.styleable.CustomSeekBar_seekTextMarginLeft, dp2px(240f))
         thumbInterval = typedArray.getDimension(R.styleable.CustomSeekBar_thumbInterval, dp2px(18f))
