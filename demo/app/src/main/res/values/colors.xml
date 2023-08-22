@@ -12,4 +12,9 @@
     <color name="seekbar_progress">#155597</color>
     <color name="seekbar_current_value_bg">#80040508</color>
     <color name="color_text_highlight">#FF30A5FE</color>
+
+    <color name="bg_start">#00F08C</color>
+    <color name="bg_end">#00AB86</color>
+    <color name="bg_track_start">#f27f0c</color>
+    <color name="bg_track_end">#ff1919</color>
 </resources>

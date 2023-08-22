@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="CustomSeekBar">
+        <attr name="seekText" format="string" />
+        <attr name="seekTextSize" format="dimension" />
+        <attr name="seekTextColor" format="color" />
+        <attr name="seekTextMarginLeft" format="dimension" />
+
+        <attr name="thumbStartColor" format="color" />
+        <attr name="thumbEndColor" format="color" />
+
+        <attr name="bgStartColor" format="color" />
+        <attr name="bgEndColor" format="color" />
+
+        <attr name="bgTrackStartColor" format="color" />
+        <attr name="bgTrackEndColor" format="color" />
+
+        <attr name="thumbInterval" format="dimension" />
+    </declare-styleable>
+</resources>

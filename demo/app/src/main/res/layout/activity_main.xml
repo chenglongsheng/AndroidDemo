@@ -7,11 +7,13 @@
     android:background="@drawable/img_main_bg"
     tools:context=".MainActivity">
 
-    <cn.cls.demo.IndicatorSeekBar
-        android:id="@+id/isb"
-        android:layout_width="match_parent"
+    <cn.cls.demo.CustomSeekBar
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:seekText="请确认周围安全确认降落" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
