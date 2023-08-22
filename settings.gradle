@@ -16,3 +16,4 @@ rootProject.name = "AndroidDemo"
 include ':app'
 include ':listview'
 include ':recycler_view'
+include ':widget'
