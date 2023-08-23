@@ -7,6 +7,10 @@ android {
     namespace 'com.loong.widget'
     compileSdk 33
 
+    viewBinding {
+        enabled true
+    }
+
     defaultConfig {
         minSdk 23
 
