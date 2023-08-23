@@ -41,6 +41,7 @@ abstract class BaseFragment<VB : ViewBinding> : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         Log.d(TAG, "onViewCreated: ")
+        setListener()
     }
 
     override fun onStart() {
@@ -78,5 +79,7 @@ abstract class BaseFragment<VB : ViewBinding> : Fragment() {
         binding = null
         super.onDestroy()
     }
+
+    abstract fun setListener()
 
 }

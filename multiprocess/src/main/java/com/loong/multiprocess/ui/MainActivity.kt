@@ -1,5 +1,6 @@
 package com.loong.multiprocess.ui
 
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -52,6 +53,7 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
+    @SuppressLint("MissingSuperCall")
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
         Log.d(TAG, "onNewIntent: ")
