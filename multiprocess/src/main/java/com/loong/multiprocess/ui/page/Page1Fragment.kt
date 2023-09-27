@@ -7,5 +7,8 @@ import com.loong.widget.framework.BaseFragment
  * @author Rosen
  * @date 2023/8/23-20:51
  */
-class Page1Fragment:BaseFragment<FragmentPage1Binding>() {
+class Page1Fragment : BaseFragment<FragmentPage1Binding>() {
+    override fun setListener() {
+
+    }
 }
