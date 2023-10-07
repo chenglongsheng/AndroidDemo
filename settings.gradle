@@ -16,3 +16,4 @@ rootProject.name = "AndroidDemo"
 include ':app'
 include ':widget'
 include ':multiprocess'
+include ':toolbox'
