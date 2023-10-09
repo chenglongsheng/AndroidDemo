@@ -128,7 +128,239 @@ sdk文件目录结构
 
   只有一个实例，创建时会新建一个栈，且栈中不能有其他实例
 
-Handler
+# 存储方式
+
+## sp存储 
+
+kv存储在xml中
+
+## 内部文件存储
+
+- 读取文件 `FileInputStream fis = openFileInput("xxx");`
+- 保存文件 `FileOutputStream fos = openFileOutput("xxx", MODE_PRIVATE);`
+- 得到files文件夹对象 `File filesDir = getFileDir();`
+- 得到asserts下的文件 `InputStream is = context.getAssets().open("xxx");`
+- 加载图片文件 `Bitmap b = BitmapFactory.decodeFile("");`
+
+## 外部文件存储
+
+数据保存的路径：
+
+- /storage/sdcard/Android/data/packageName/files/ 其它应用可以访问，应用卸载时删除
+- /storage/sdcard/xxx/ 其它应用可以访问，应用卸载时不会删除
+
+Environment：操作SD卡的工具类
+得到SD卡的状态：`Environment.getExternalStorageState()`
+得到SD卡的路径：`Environment.getExternalStorageDirectory()`
+SD卡可读写的挂载状态值：`Environment.MEDIA_MOUNTED`
+context.getExternalFilesDir():
+/mnt/sdcard/Android/data/pageckage_name/files/xxx.txt
+操作SD卡的权限：
+`android.permission.WRITE_EXTERNAL_STORAGE`
+
+## SQLite数据库存储
+
+有一定结构的数据，关系型数据库
+
+文件类型是`.db`
+
+路径：/data/data/包名/databases/xxx.db
+
+默认情况其他应用不可以访问，通过ContentProvider提供数据访问
+
+### 相关API
+
+SQLiteOpenHelper
+
+SQLiteDatabase
+
+## 服务器存储
+
+使用网络库处理HTTP请求
+
+# Handler消息机制
+
+## Message
+
+本类顾名思义作为消息载体，摘选关键源码分析
+
+```java
+public final class Message implements Parcelable {
+    public int what; // 消息的标识，用于区分的id
+    public long when; // 消息发生的目标时间
+    Handler target; // 用于处理该消息的Handler对象引用
+    Runnable callback; // Message的回调函数
+    Message next; // 下一个消息的引用，Message是作为单链表的节点角色用来组成消息复用池，消息缓存池本质是单链表，每个节点的数据字段都置空或归零
+    private static Message sPool; // 永远指向头节点，表明消息池有缓存数据
+    
+    /**
+    * 生产消息，sPool不为空表明消息池也就是链表有节点，取头节点作为本次消息的载体，sPool指针后移。若没有生产过消息，则new一个消息
+    */
+    public static Message obtain() {
+        synchronized (sPoolSync) {
+            if (sPool != null) {
+                Message m = sPool;
+                sPool = m.next;
+                m.next = null;
+                m.flags = 0; // clear in-use flag
+                sPoolSize--;
+                return m;
+            }
+        }
+        return new Message();
+    }
+    
+    /**
+    * 回收消息，把所有字段重置，在链表中接为头节点。链表最大数量小于50个
+    */
+    void recycleUnchecked() {
+        // Mark the message as in use while it remains in the recycled object pool.
+        // Clear out all other details.
+        flags = FLAG_IN_USE;
+        what = 0;
+        arg1 = 0;
+        arg2 = 0;
+        obj = null;
+        replyTo = null;
+        sendingUid = UID_NONE;
+        workSourceUid = UID_NONE;
+        when = 0;
+        target = null;
+        callback = null;
+        data = null;
+
+        synchronized (sPoolSync) {
+            if (sPoolSize < MAX_POOL_SIZE) {
+                next = sPool;
+                sPool = this;
+                sPoolSize++;
+            }
+        }
+    }
+}
+```
+
+创建消息实例应该使用`Message.obtain()`函数从缓存池中复用以减少内存消耗。消息缓存池实现原理是数量小于50个节点的单链表，消息是单链表中的节点。获取消息和回收消息操作的都是头节点
+
+## Handler
+
+发送消息、分发处理消息、移除未处理的消息
+
+常用的`post(Runnable r)`和`sendMessage(Message msg)`以及一系列带时间延迟的重载函数，最终调用的都是`sendMessageAtTime(Message msg, long uptimeMillis)`函数，而这个函数是执行`enqueueMessage`函数。
+
+```java
+public class Handler {
+    final Looper mLooper;
+    final MessageQueue mQueue;
+    final Callback mCallback;
+
+    public void handleMessage(@NonNull Message msg) {
+    }
+
+    // 消息分发有三个走向，消息有Runnable就只处理消息带的；否则handler的回调存在就执行，
+    // 这个回调需要返回true就不会再执行我们重写handler的handleMessage
+    public void dispatchMessage(@NonNull Message msg) {
+        if (msg.callback != null) {
+            handleCallback(msg); // 1
+        } else {
+            if (mCallback != null) {
+                if (mCallback.handleMessage(msg)) { // 2
+                    return;
+                }
+            }
+            handleMessage(msg); // 3
+        }
+    }
+
+    private boolean enqueueMessage(@NonNull MessageQueue queue, @NonNull Message msg,
+                                   long uptimeMillis) {
+        msg.target = this; // 在经由handler发送消息时指明处理消息的handler，this指向自己
+        msg.workSourceUid = ThreadLocalWorkSource.getUid();
+
+        if (mAsynchronous) {
+            msg.setAsynchronous(true);
+        }
+        return queue.enqueueMessage(msg, uptimeMillis); // 消息进队列由MessageQueue消费消息
+    }
+}
+```
+
+
+
+## MessageQueue
+
+MessageQueue主要作用处理**消息入队**和**取消息**，本身和队列没有什么关联。
+
+在`enqueueMessage(Message msg, long when)`函数中，
+
+```java
+public final class MessageQueue {
+    boolean enqueueMessage(Message msg, long when) {
+        if (msg.target == null) {
+            throw new IllegalArgumentException("Message must have a target.");
+        }
+
+        synchronized (this) {
+            if (msg.isInUse()) {
+                throw new IllegalStateException(msg + " This message is already in use.");
+            }
+
+            if (mQuitting) {
+                IllegalStateException e = new IllegalStateException(
+                        msg.target + " sending message to a Handler on a dead thread");
+                Log.w(TAG, e.getMessage(), e);
+                msg.recycle();
+                return false;
+            }
+
+            msg.markInUse();
+            msg.when = when;
+            Message p = mMessages;
+            boolean needWake;
+            if (p == null || when == 0 || when < p.when) {
+                // New head, wake up the event queue if blocked.
+                msg.next = p;
+                mMessages = msg;
+                needWake = mBlocked;
+            } else {
+                // Inserted within the middle of the queue.  Usually we don't have to wake
+                // up the event queue unless there is a barrier at the head of the queue
+                // and the message is the earliest asynchronous message in the queue.
+                needWake = mBlocked && p.target == null && msg.isAsynchronous();
+                Message prev;
+                for (;;) {
+                    prev = p;
+                    p = p.next;
+                    if (p == null || when < p.when) {
+                        break;
+                    }
+                    if (needWake && p.isAsynchronous()) {
+                        needWake = false;
+                    }
+                }
+                msg.next = p; // invariant: p == prev.next
+                prev.next = msg;
+            }
+
+            // We can assume mPtr != 0 because mQuitting is false.
+            if (needWake) {
+                nativeWake(mPtr);
+            }
+        }
+        return true;
+    }
+}
+```
+
+
+
+## Looper
+
+包含Handler和MessageQueue的对象，循环从队列中获取消息分发处理
+
+回收消息至缓存池
+
+## 源码分析
 
 ```java
 public final class ActivityThread extends ClientTransactionHandler
