@@ -391,6 +391,7 @@ public final class ActivityThread extends ClientTransactionHandler
 
 在Looper中`prepareMainLooper()`函数是由程序启动创建ActivityThread时在main方法调用去实例化Looper。
 `loopOnce`方法中核心是在队列中取消息，若是没有消息就结束，然后分发消息，最后回收消息。分三步：
+
 1. `me.mQueue.next();`
 2. `msg.target.dispatchMessage(msg);`
 3. `msg.recycleUnchecked();`
@@ -565,7 +566,7 @@ public final class MessageQueue {
         int pendingIdleHandlerCount = -1; // -1 only during first iteration
         int nextPollTimeoutMillis = 0;
         // 进入死循环
-        for (;;) {
+        for (; ; ) {
             if (nextPollTimeoutMillis != 0) {
                 Binder.flushPendingCommands();
             }
