@@ -62,7 +62,7 @@ class CustomSeekBar : View {
     var progress = 0
         set(value) {
             field = value
-            invalidate()
+            postInvalidate()
         }
 
     private var processBlock: ((Int) -> Unit)? = null
@@ -231,12 +231,15 @@ class CustomSeekBar : View {
         canvas.drawPath(path, mPaint)
         path.reset()
         // 小圆
-        mPaint.shader = LinearGradient(
-            left, radius, left + height, radius,
-            thumbStartColor,
-            thumbEndColor,
-            Shader.TileMode.CLAMP
-        )
+//        mPaint.shader = LinearGradient(
+//            left, radius, left + height, radius,
+//            thumbStartColor,
+//            thumbEndColor,
+//            Shader.TileMode.CLAMP
+//        )
+        mPaint.reset()
+        mPaint.style = Paint.Style.FILL
+        mPaint.color = Color.WHITE
         canvas.drawCircle(
             left + radius,
             height.toFloat() / 2,
@@ -251,23 +254,22 @@ class CustomSeekBar : View {
         val thumbPosition = radius + radius - thumbInterval
         if (dx + thumbPosition > textLeft) {
             mTextPaint.shader = LinearGradient(
-                dx + thumbPosition, height.toFloat() / 2, textRight / 2 + dx, height.toFloat() / 2,
-                Color.TRANSPARENT, seekTextColor,
-                Shader.TileMode.CLAMP
-            )
-        } else if (dx + thumbPosition < textRight) {
-            mTextPaint.shader = LinearGradient(
-                0f, 0f, textLeft, 0f,
-                seekTextColor, seekTextColor,
+                dx + thumbPosition,
+                height.toFloat() / 2,
+                dx + thumbPosition + 1,
+                height.toFloat() / 2,
+                Color.TRANSPARENT,
+                seekTextColor,
                 Shader.TileMode.CLAMP
             )
         } else {
             mTextPaint.shader = LinearGradient(
-                0f, 0f, textLeft, 0f,
-                Color.TRANSPARENT, Color.TRANSPARENT,
+                textLeft, height.toFloat() / 2, textRight, height.toFloat() / 2,
+                seekTextColor, seekTextColor,
                 Shader.TileMode.CLAMP
             )
         }
+        mTextPaint.color = seekTextColor
         canvas.drawText(
             seekText,
             textLeft,
