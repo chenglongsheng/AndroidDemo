@@ -130,7 +130,7 @@ sdk文件目录结构
 
 # 存储方式
 
-## sp存储 
+## sp存储
 
 kv存储在xml中
 
@@ -180,9 +180,11 @@ SQLiteDatabase
 
 # Handler消息机制
 
+摘选关键源码分析
+
 ## Message
 
-本类顾名思义作为消息载体，摘选关键源码分析
+本类顾名思义作为消息载体
 
 ```java
 public final class Message implements Parcelable {
@@ -192,10 +194,10 @@ public final class Message implements Parcelable {
     Runnable callback; // Message的回调函数
     Message next; // 下一个消息的引用，Message是作为单链表的节点角色用来组成消息复用池，消息缓存池本质是单链表，每个节点的数据字段都置空或归零
     private static Message sPool; // 永远指向头节点，表明消息池有缓存数据
-    
+
     /**
-    * 生产消息，sPool不为空表明消息池也就是链表有节点，取头节点作为本次消息的载体，sPool指针后移。若没有生产过消息，则new一个消息
-    */
+     * 生产消息，sPool不为空表明消息池也就是链表有节点，取头节点作为本次消息的载体，sPool指针后移。若没有生产过消息，则new一个消息
+     */
     public static Message obtain() {
         synchronized (sPoolSync) {
             if (sPool != null) {
@@ -209,10 +211,10 @@ public final class Message implements Parcelable {
         }
         return new Message();
     }
-    
+
     /**
-    * 回收消息，把所有字段重置，在链表中接为头节点。链表最大数量小于50个
-    */
+     * 回收消息，把所有字段重置，在链表中接为头节点。链表最大数量小于50个
+     */
     void recycleUnchecked() {
         // Mark the message as in use while it remains in the recycled object pool.
         // Clear out all other details.
@@ -240,13 +242,20 @@ public final class Message implements Parcelable {
 }
 ```
 
-创建消息实例应该使用`Message.obtain()`函数从缓存池中复用以减少内存消耗。消息缓存池实现原理是数量小于50个节点的单链表，消息是单链表中的节点。获取消息和回收消息操作的都是头节点
+创建消息实例应该使用`Message.obtain()`
+函数从缓存池中复用以减少内存消耗。消息缓存池实现原理是数量小于50个节点的单链表，消息是单链表中的节点。获取消息和回收消息操作的都是头节点
 
 ## Handler
 
 发送消息、分发处理消息、移除未处理的消息
 
-常用的`post(Runnable r)`和`sendMessage(Message msg)`以及一系列带时间延迟的重载函数，最终调用的都是`sendMessageAtTime(Message msg, long uptimeMillis)`函数，而这个函数是执行`enqueueMessage`函数。
+常用的`post(Runnable r)`和`sendMessage(Message msg)`以及一系列带时间延迟的重载函数，
+最终调用的都是`sendMessageAtTime(Message msg, long uptimeMillis)`
+函数，而这个函数是执行`enqueueMessage`函数。
+在调用`sendMessageAtTime(Message msg, long uptimeMillis)`函数之前，分两类函数：
+
+- xxxAtTime：内部没有使用`SystemClock.uptimeMillis()`，实参没有加上这个值会打乱Message的优先级
+- xxxDelayed：行参被加上`SystemClock.uptimeMillis()`，会按照`when`值升序插入队列
 
 ```java
 public class Handler {
@@ -285,22 +294,28 @@ public class Handler {
 }
 ```
 
-
-
 ## MessageQueue
 
 MessageQueue主要作用处理**消息入队**和**取消息**，本身和队列没有什么关联。
 
-在`enqueueMessage(Message msg, long when)`函数中，
+在`enqueueMessage(Message msg, long when)`函数中，实现对未处理消息链表查询到合适位置插入本次新增的节点
+
+`next()`是对在链表中取元素，有三个关键点：
+
+- nativePollOnce(ptr, nextPollTimeoutMillis);
+-
 
 ```java
 public final class MessageQueue {
+    Message mMessages; // 取名意为消息集合，但是类型是Message，作用是代指链表的头节点。存在头节点则链表存在数据
+
     boolean enqueueMessage(Message msg, long when) {
         if (msg.target == null) {
             throw new IllegalArgumentException("Message must have a target.");
         }
 
         synchronized (this) {
+            // 容错处理
             if (msg.isInUse()) {
                 throw new IllegalStateException(msg + " This message is already in use.");
             }
@@ -314,250 +329,45 @@ public final class MessageQueue {
             }
 
             msg.markInUse();
-            msg.when = when;
-            Message p = mMessages;
+            msg.when = when; // 预期处理时间
+            Message p = mMessages; // 记录当前头节点
             boolean needWake;
             if (p == null || when == 0 || when < p.when) {
-                // New head, wake up the event queue if blocked.
+                // 第一次插入链表以及后续按优先级插入到头节点
                 msg.next = p;
-                mMessages = msg;
+                mMessages = msg; // 前移指向当前的头节点
                 needWake = mBlocked;
             } else {
-                // Inserted within the middle of the queue.  Usually we don't have to wake
-                // up the event queue unless there is a barrier at the head of the queue
-                // and the message is the earliest asynchronous message in the queue.
+                // 在链表中插入节点，新插入节点的when >= 当前头节点的when
                 needWake = mBlocked && p.target == null && msg.isAsynchronous();
-                Message prev;
-                for (;;) {
+                Message prev; // 记录指针的前一个节点
+                for (; ; ) { // 遍历链表找到合适插入的位置
                     prev = p;
-                    p = p.next;
-                    if (p == null || when < p.when) {
+                    p = p.next; // 指针后移
+                    if (p == null || when < p.when) { // 到达尾节点或者排序到合适位置后停止
                         break;
                     }
                     if (needWake && p.isAsynchronous()) {
                         needWake = false;
                     }
                 }
-                msg.next = p; // invariant: p == prev.next
+                // 排序完成插入节点
+                msg.next = p;
                 prev.next = msg;
             }
 
             // We can assume mPtr != 0 because mQuitting is false.
             if (needWake) {
-                nativeWake(mPtr);
+                nativeWake(mPtr); // 本地方法，唤醒CPU给予调度
             }
         }
         return true;
-    }
-}
-```
-
-
-
-## Looper
-
-包含Handler和MessageQueue的对象，循环从队列中获取消息分发处理
-
-回收消息至缓存池
-
-## 源码分析
-
-```java
-public final class ActivityThread extends ClientTransactionHandler
-        implements ActivityThreadInternal {
-    public static void main(String[] args) {
-        // 省略...
-
-        // 实例化主线程的Looper实例
-        Looper.prepareMainLooper();
-
-        // 省略...
-        ActivityThread thread = new ActivityThread();
-        // 通过binder连接ActivityManager服务
-        thread.attach(false, startSeq);
-
-        if (sMainThreadHandler == null) {
-            sMainThreadHandler = thread.getHandler();
-        }
-
-        // 省略...
-        // 开启死循环处理消息
-        Looper.loop();
-
-        throw new RuntimeException("Main thread loop unexpectedly exited");
-    }
-}
-```
-
-在Looper中`prepareMainLooper()`函数是由程序启动创建ActivityThread时在main方法调用去实例化Looper。
-`loopOnce`方法中核心是在队列中取消息，若是没有消息就结束，然后分发消息，最后回收消息。分三步：
-
-1. `me.mQueue.next();`
-2. `msg.target.dispatchMessage(msg);`
-3. `msg.recycleUnchecked();`
-
-Looper在实例化的时候创建属于自己的消息队列，并且把当前的线程作为自己的处理线程
-
-```java
-public final class Looper {
-    private Looper(boolean quitAllowed) {
-        mQueue = new MessageQueue(quitAllowed);
-        mThread = Thread.currentThread();
-    }
-
-    @Deprecated
-    public static void prepareMainLooper() {
-        prepare(false);
-        synchronized (Looper.class) {
-            if (sMainLooper != null) {
-                throw new IllegalStateException("The main Looper has already been prepared.");
-            }
-            sMainLooper = myLooper();
-        }
-    }
-
-    private static void prepare(boolean quitAllowed) {
-        if (sThreadLocal.get() != null) {
-            throw new RuntimeException("Only one Looper may be created per thread");
-        }
-        sThreadLocal.set(new Looper(quitAllowed));
-    }
-
-    public static void loop() {
-        final Looper me = myLooper();
-        if (me == null) {
-            throw new RuntimeException("No Looper; Looper.prepare() wasn't called on this thread.");
-        }
-        if (me.mInLoop) {
-            Slog.w(TAG, "Loop again would have the queued messages be executed" + " before this one completed.");
-        }
-
-        me.mInLoop = true;
-
-        // Make sure the identity of this thread is that of the local process,
-        // and keep track of what that identity token actually is.
-        Binder.clearCallingIdentity();
-        final long ident = Binder.clearCallingIdentity();
-
-        // Allow overriding a threshold with a system prop. e.g.
-        // adb shell 'setprop log.looper.1000.main.slow 1 && stop && start'
-        final int thresholdOverride = SystemProperties.getInt("log.looper." + Process.myUid() + "." + Thread.currentThread().getName() + ".slow", 0);
-
-        me.mSlowDeliveryDetected = false;
-
-        // 进入死循环 当false的时候退出循环
-        for (; ; ) {
-            if (!loopOnce(me, ident, thresholdOverride)) {
-                return;
-            }
-        }
-    }
-
-    private static boolean loopOnce(final Looper me, final long ident, final int thresholdOverride) {
-        Message msg = me.mQueue.next(); // might block
-        if (msg == null) {
-            // 没有消息时结束死循环，loop()方法也结束
-            return false;
-        }
-
-        // This must be in a local variable, in case a UI event sets the logger
-        final Printer logging = me.mLogging;
-        if (logging != null) {
-            logging.println(">>>>> Dispatching to " + msg.target + " " + msg.callback + ": " + msg.what);
-        }
-        // Make sure the observer won't change while processing a transaction.
-        final Observer observer = sObserver;
-
-        final long traceTag = me.mTraceTag;
-        long slowDispatchThresholdMs = me.mSlowDispatchThresholdMs;
-        long slowDeliveryThresholdMs = me.mSlowDeliveryThresholdMs;
-        if (thresholdOverride > 0) {
-            slowDispatchThresholdMs = thresholdOverride;
-            slowDeliveryThresholdMs = thresholdOverride;
-        }
-        final boolean logSlowDelivery = (slowDeliveryThresholdMs > 0) && (msg.when > 0);
-        final boolean logSlowDispatch = (slowDispatchThresholdMs > 0);
-
-        final boolean needStartTime = logSlowDelivery || logSlowDispatch;
-        final boolean needEndTime = logSlowDispatch;
-
-        if (traceTag != 0 && Trace.isTagEnabled(traceTag)) {
-            Trace.traceBegin(traceTag, msg.target.getTraceName(msg));
-        }
-
-        final long dispatchStart = needStartTime ? SystemClock.uptimeMillis() : 0;
-        final long dispatchEnd;
-        Object token = null;
-        if (observer != null) {
-            token = observer.messageDispatchStarting();
-        }
-        long origWorkSource = ThreadLocalWorkSource.setUid(msg.workSourceUid);
-        try {
-            // 队列中的下一个msg交由handler分发
-            msg.target.dispatchMessage(msg);
-            if (observer != null) {
-                observer.messageDispatched(token, msg);
-            }
-            dispatchEnd = needEndTime ? SystemClock.uptimeMillis() : 0;
-        } catch (Exception exception) {
-            if (observer != null) {
-                observer.dispatchingThrewException(token, msg, exception);
-            }
-            throw exception;
-        } finally {
-            ThreadLocalWorkSource.restore(origWorkSource);
-            if (traceTag != 0) {
-                Trace.traceEnd(traceTag);
-            }
-        }
-        if (logSlowDelivery) {
-            if (me.mSlowDeliveryDetected) {
-                if ((dispatchStart - msg.when) <= 10) {
-                    Slog.w(TAG, "Drained");
-                    me.mSlowDeliveryDetected = false;
-                }
-            } else {
-                if (showSlowLog(slowDeliveryThresholdMs, msg.when, dispatchStart, "delivery", msg)) {
-                    // Once we write a slow delivery log, suppress until the queue drains.
-                    me.mSlowDeliveryDetected = true;
-                }
-            }
-        }
-        if (logSlowDispatch) {
-            showSlowLog(slowDispatchThresholdMs, dispatchStart, dispatchEnd, "dispatch", msg);
-        }
-
-        if (logging != null) {
-            logging.println("<<<<< Finished to " + msg.target + " " + msg.callback);
-        }
-
-        // Make sure that during the course of dispatching the
-        // identity of the thread wasn't corrupted.
-        final long newIdent = Binder.clearCallingIdentity();
-        if (ident != newIdent) {
-            Log.wtf(TAG, "Thread identity changed from 0x" + Long.toHexString(ident) + " to 0x" + Long.toHexString(newIdent) + " while dispatching to " + msg.target.getClass().getName() + " " + msg.callback + " what=" + msg.what);
-        }
-
-        msg.recycleUnchecked();
-
-        // 完成一次消息分发后继续下一次循环
-        return true;
-    }
-}
-```
-
-消息队列在Looper被创建的时候被实例化，记录能否退出，以及native层初始化。
-在Looper的loopOnce方法中会调用`next()`函数
-
-```java
-public final class MessageQueue {
-    MessageQueue(boolean quitAllowed) {
-        mQuitAllowed = quitAllowed;
-        mPtr = nativeInit();
     }
 
     Message next() {
-        // 退出了循环
+        // Return here if the message loop has already quit and been disposed.
+        // This can happen if the application tries to restart a looper after quit
+        // which is not supported.
         final long ptr = mPtr;
         if (ptr == 0) {
             return null;
@@ -565,39 +375,39 @@ public final class MessageQueue {
 
         int pendingIdleHandlerCount = -1; // -1 only during first iteration
         int nextPollTimeoutMillis = 0;
-        // 进入死循环
+        // 进入阻塞状态取消息
         for (; ; ) {
             if (nextPollTimeoutMillis != 0) {
                 Binder.flushPendingCommands();
             }
 
-            nativePollOnce(ptr, nextPollTimeoutMillis);
+            nativePollOnce(ptr, nextPollTimeoutMillis); // 本地方法
 
             synchronized (this) {
                 // Try to retrieve the next message.  Return if found.
                 final long now = SystemClock.uptimeMillis();
-                Message prevMsg = null;
-                Message msg = mMessages;
+                Message prevMsg = null; // 指针前一个节点
+                Message msg = mMessages; // 指针
+                // 头节点没有Handler处理，就去找异步消息
                 if (msg != null && msg.target == null) {
                     // Stalled by a barrier.  Find the next asynchronous message in the queue.
-                    do {
+                    do { // 指针后移
                         prevMsg = msg;
                         msg = msg.next;
-                    } while (msg != null && !msg.isAsynchronous());
+                    } while (msg != null && !msg.isAsynchronous()); // 遇到异步消息停止后移
                 }
                 if (msg != null) {
-                    if (now < msg.when) {
-                        // Next message is not ready.  Set a timeout to wake up when it is ready.
+                    if (now < msg.when) { // 没有到达消息的预期处理时间点，记录下这个消息的预期被处理到现在的时间差
                         nextPollTimeoutMillis = (int) Math.min(msg.when - now, Integer.MAX_VALUE);
                     } else {
                         // Got a message.
                         mBlocked = false;
                         if (prevMsg != null) {
-                            prevMsg.next = msg.next;
+                            prevMsg.next = msg.next; // 从链表中移除这个节点
                         } else {
-                            mMessages = msg.next;
+                            mMessages = msg.next; // 这个就是头节点
                         }
-                        msg.next = null;
+                        msg.next = null; // 从链表中移除这个节点
                         if (DEBUG) Log.v(TAG, "Returning message: " + msg);
                         msg.markInUse();
                         return msg;
@@ -659,6 +469,172 @@ public final class MessageQueue {
             // so go back and look again for a pending message without waiting.
             nextPollTimeoutMillis = 0;
         }
+    }
+}
+```
+
+## Looper
+
+Looper作用是让当前线程阻塞从MessageQueue中获取消息给Handler分发Message
+
+通过`prepare()`函数实例化一个Looper
+
+```java
+public final class Looper {
+    // 通过ThreadLocal确保一个处理线程对一个Looper
+    static final ThreadLocal<Looper> sThreadLocal = new ThreadLocal<Looper>();
+
+    private static void prepare(boolean quitAllowed) {
+        if (sThreadLocal.get() != null) {
+            throw new RuntimeException("Only one Looper may be created per thread");
+        }
+        sThreadLocal.set(new Looper(quitAllowed));
+    }
+
+    private Looper(boolean quitAllowed) {
+        mQueue = new MessageQueue(quitAllowed);
+        mThread = Thread.currentThread();
+    }
+}
+```
+
+调用`loop()`函数执行死循环获取消息
+
+```
+for (;;) {
+    if (!loopOnce(me, ident, thresholdOverride)) {
+        return;
+    }
+}
+```
+
+在`loopOnce`中取消息
+
+```java
+public final class Looper {
+    private static boolean loopOnce(final Looper me,
+                                    final long ident, final int thresholdOverride) {
+        Message msg = me.mQueue.next(); // 当取出msg为空的时候，应用应该是退出
+        if (msg == null) {
+            // No message indicates that the message queue is quitting.
+            return false;
+        }
+
+        // This must be in a local variable, in case a UI event sets the logger
+        final Printer logging = me.mLogging;
+        if (logging != null) {
+            logging.println(">>>>> Dispatching to " + msg.target + " "
+                    + msg.callback + ": " + msg.what);
+        }
+        // Make sure the observer won't change while processing a transaction.
+        final Observer observer = sObserver;
+
+        final long traceTag = me.mTraceTag;
+        long slowDispatchThresholdMs = me.mSlowDispatchThresholdMs;
+        long slowDeliveryThresholdMs = me.mSlowDeliveryThresholdMs;
+        if (thresholdOverride > 0) {
+            slowDispatchThresholdMs = thresholdOverride;
+            slowDeliveryThresholdMs = thresholdOverride;
+        }
+        final boolean logSlowDelivery = (slowDeliveryThresholdMs > 0) && (msg.when > 0);
+        final boolean logSlowDispatch = (slowDispatchThresholdMs > 0);
+
+        final boolean needStartTime = logSlowDelivery || logSlowDispatch;
+        final boolean needEndTime = logSlowDispatch;
+
+        if (traceTag != 0 && Trace.isTagEnabled(traceTag)) {
+            Trace.traceBegin(traceTag, msg.target.getTraceName(msg));
+        }
+
+        final long dispatchStart = needStartTime ? SystemClock.uptimeMillis() : 0;
+        final long dispatchEnd;
+        Object token = null;
+        if (observer != null) {
+            token = observer.messageDispatchStarting();
+        }
+        long origWorkSource = ThreadLocalWorkSource.setUid(msg.workSourceUid);
+        try {
+            msg.target.dispatchMessage(msg); // 把消息给handler去分发消息，1、msg的回调 2、handler的回调 3、重写的handleMessage
+            if (observer != null) {
+                observer.messageDispatched(token, msg);
+            }
+            dispatchEnd = needEndTime ? SystemClock.uptimeMillis() : 0;
+        } catch (Exception exception) {
+            if (observer != null) {
+                observer.dispatchingThrewException(token, msg, exception);
+            }
+            throw exception;
+        } finally {
+            ThreadLocalWorkSource.restore(origWorkSource);
+            if (traceTag != 0) {
+                Trace.traceEnd(traceTag);
+            }
+        }
+        if (logSlowDelivery) {
+            if (me.mSlowDeliveryDetected) {
+                if ((dispatchStart - msg.when) <= 10) {
+                    Slog.w(TAG, "Drained");
+                    me.mSlowDeliveryDetected = false;
+                }
+            } else {
+                if (showSlowLog(slowDeliveryThresholdMs, msg.when, dispatchStart, "delivery",
+                        msg)) {
+                    // Once we write a slow delivery log, suppress until the queue drains.
+                    me.mSlowDeliveryDetected = true;
+                }
+            }
+        }
+        if (logSlowDispatch) {
+            showSlowLog(slowDispatchThresholdMs, dispatchStart, dispatchEnd, "dispatch", msg);
+        }
+
+        if (logging != null) {
+            logging.println("<<<<< Finished to " + msg.target + " " + msg.callback);
+        }
+
+        // Make sure that during the course of dispatching the
+        // identity of the thread wasn't corrupted.
+        final long newIdent = Binder.clearCallingIdentity();
+        if (ident != newIdent) {
+            Log.wtf(TAG, "Thread identity changed from 0x"
+                    + Long.toHexString(ident) + " to 0x"
+                    + Long.toHexString(newIdent) + " while dispatching to "
+                    + msg.target.getClass().getName() + " "
+                    + msg.callback + " what=" + msg.what);
+        }
+
+        msg.recycleUnchecked(); // 回收消息，重置所属消息的变量
+
+        return true;
+    }
+}
+```
+
+主线程Handler的启动
+
+```java
+public final class ActivityThread extends ClientTransactionHandler
+        implements ActivityThreadInternal {
+    public static void main(String[] args) {
+        // 省略...
+
+        // 实例化主线程的Looper实例
+        Looper.prepareMainLooper();
+
+        // 省略...
+        ActivityThread thread = new ActivityThread();
+        // 通过binder连接ActivityManager服务
+        thread.attach(false, startSeq);
+
+        if (sMainThreadHandler == null) {
+            sMainThreadHandler = thread.getHandler();
+        }
+
+        // 省略...
+        // 开启死循环处理消息
+        Looper.loop();
+
+        throw new RuntimeException("Main thread loop unexpectedly exited");
     }
 }
 ```
