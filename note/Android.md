@@ -381,7 +381,7 @@ public final class MessageQueue {
                 Binder.flushPendingCommands();
             }
 
-            nativePollOnce(ptr, nextPollTimeoutMillis); // 本地方法
+            nativePollOnce(ptr, nextPollTimeoutMillis); // 本地方法 唤醒调度
 
             synchronized (this) {
                 // Try to retrieve the next message.  Return if found.
@@ -389,8 +389,8 @@ public final class MessageQueue {
                 Message prevMsg = null; // 指针前一个节点
                 Message msg = mMessages; // 指针
                 // 头节点没有Handler处理，就去找异步消息
+                // 头节点没有handler来处理消息？在Handler的enqueueMessage中有msg.target = this;。所以这类消息的target不可能为空，疑问点
                 if (msg != null && msg.target == null) {
-                    // Stalled by a barrier.  Find the next asynchronous message in the queue.
                     do { // 指针后移
                         prevMsg = msg;
                         msg = msg.next;
@@ -635,6 +635,86 @@ public final class ActivityThread extends ClientTransactionHandler
         Looper.loop();
 
         throw new RuntimeException("Main thread loop unexpectedly exited");
+    }
+}
+```
+
+## 屏障消息
+
+在上述中，MessageQueue的next中有处理Message的target为空的情况，意味着这个Message是没有Handler处理的。
+而在后续逻辑中会寻找链表中标记为**异步**的Message，而后返回这个异步Message。
+Message分成同步消息、屏障消息、异步消息，当插入屏障消息就会跳过所有同步消息
+
+通过`postSyncBarrier()`
+函数发出没有handler的屏障消息，这个消息也是有序的，调用重载函数`postSyncBarrier(SystemClock.uptimeMillis());`
+
+```java
+public final class MessageQueue {
+    public int postSyncBarrier() {
+        return postSyncBarrier(SystemClock.uptimeMillis());
+    }
+
+    // 本质是enqueueMessage入队的操作
+    private int postSyncBarrier(long when) {
+        // Enqueue a new sync barrier token.
+        // We don't need to wake the queue because the purpose of a barrier is to stall it.
+        synchronized (this) {
+            final int token = mNextBarrierToken++;
+            final Message msg = Message.obtain();
+            msg.markInUse();
+            msg.when = when;
+            msg.arg1 = token;
+
+            Message prev = null;
+            Message p = mMessages;
+            if (when != 0) {
+                while (p != null && p.when <= when) {
+                    prev = p;
+                    p = p.next;
+                }
+            }
+            if (prev != null) { // invariant: p == prev.next
+                msg.next = p;
+                prev.next = msg;
+            } else {
+                msg.next = p;
+                mMessages = msg;
+            }
+            return token;
+        }
+    }
+
+    public void removeSyncBarrier(int token) {
+        // Remove a sync barrier token from the queue.
+        // If the queue is no longer stalled by a barrier then wake it.
+        synchronized (this) {
+            Message prev = null;
+            Message p = mMessages;
+            while (p != null && (p.target != null || p.arg1 != token)) { // 跳过非屏障消息和非目标屏障消息
+                prev = p;
+                p = p.next;
+            }
+            if (p == null) {
+                throw new IllegalStateException("The specified message queue synchronization "
+                        + " barrier token has not been posted or has already been removed.");
+            }
+            // 重链表中移除这个屏障消息
+            final boolean needWake;
+            if (prev != null) {
+                prev.next = p.next;
+                needWake = false;
+            } else {
+                mMessages = p.next;
+                needWake = mMessages == null || mMessages.target != null;
+            }
+            p.recycleUnchecked();
+
+            // If the loop is quitting then it is already awake.
+            // We can assume mPtr != 0 when mQuitting is false.
+            if (needWake && !mQuitting) {
+                nativeWake(mPtr);
+            }
+        }
     }
 }
 ```
