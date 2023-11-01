@@ -718,3 +718,160 @@ public final class MessageQueue {
     }
 }
 ```
+
+# 二、常用库
+
+## Hilt
+
+Android的依赖注入库
+
+使用方式：
+
+1. 添加hilt的gradle插件
+2. 声明依赖和Java8环境
+3. 定义Application类并添加`@HiltAndroidApp`注解，启用hilt会触发代码生成操作
+
+在 Application 类中设置了 Hilt 且有了应用级组件后，Hilt 可以为带有 `@AndroidEntryPoint` 注解的其他
+Android 类提供依赖项
+
+实例化对象的构造器需要指定使用哪些参数，可以通过构造器注入声明需要的依赖
+
+例如：
+
+```kotlin
+@AndroidEntryPoint
+class A {
+    val b = B(AnalyticsService())
+}
+```
+
+```kotlin
+@AndroidEntryPoint
+class A {
+    @Inject
+    val b: B
+}
+
+class B @Inject constructor(
+    private val service: AnalyticsService
+) {}
+```
+
+对于不能通过构造器注入的类型，可以使用hilt模块定义如何依赖注入，使用hilt模块需要在使用
+`@Module`和`@InstallIn`注解，用于表明这是一个提供依赖的模块类，其作用域会被安装在什么地方
+
+1. 通过`@Bands`注入接口
+
+```kotlin
+interface Service {
+    fun start()
+}
+
+class ServiceImpl @Inject constructor() : Service {
+    override fun start() {}
+}
+
+@Module
+@InstallIn(ActivityComponent::class)
+abstract class ServiceModule {
+    @Bands
+    abstract fun bindService(serviceImpl: ServiceImpl): Service
+}
+```
+
+所有的service实例都可以注入activity中
+
+2. 使用`@Provides`第三方库提供的依赖或者通过建造模式创建对象
+
+```kotlin
+@Module
+@InstallIn(ActivityComponent::class)
+object AnalyticsModule {
+
+    @Provides
+    fun provideAnalyticsService(): AnalyticsService {
+        return Retrofit.Builder()
+            .baseUrl("https://example.com")
+            .build()
+            .create(AnalyticsService::class.java)
+    }
+}
+```
+
+权限修饰
+
+可以通过一下第一不同权限提供不同的实例
+
+```kotlin
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class AuthInterceptorOkHttpClient
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class OtherInterceptorOkHttpClient
+
+@Module
+@InstallIn(SingletonComponent::class)
+object NetworkModule {
+
+    @AuthInterceptorOkHttpClient
+    @Provides
+    fun provideAuthInterceptorOkHttpClient(
+        authInterceptor: AuthInterceptor
+    ): OkHttpClient {
+        return OkHttpClient.Builder()
+            .addInterceptor(authInterceptor)
+            .build()
+    }
+
+    @OtherInterceptorOkHttpClient
+    @Provides
+    fun provideOtherInterceptorOkHttpClient(
+        otherInterceptor: OtherInterceptor
+    ): OkHttpClient {
+        return OkHttpClient.Builder()
+            .addInterceptor(otherInterceptor)
+            .build()
+    }
+}
+```
+
+虽然返回是相同的类型，但是通过这个限定符可以提供不同功能的实例，获取这个类型的实例时通过自定义的标识符标明使用哪个功能的实例
+
+预定义的权限修饰符
+提供context的`@ApplicationContext`和`@ActivityContext`
+
+组件生命周期
+Hilt 会按照相应 Android 类的生命周期自动创建和销毁生成的组件类的实例。
+
+|          生成的组件	           |          创建时机          |        	销毁时机         |
+|:-------------------------:|:----------------------:|:--------------------:|
+|    SingletonComponent	    | Application#onCreate() |   	Application 已销毁   |
+| ActivityRetainedComponent |  Activity#onCreate()   | Activity#onDestroy() |
+|    ViewModelComponent     |     ViewModel 已创建      |    ViewModel 已销毁     |
+|     ActivityComponent     |  Activity#onCreate()   | Activity#onDestroy() |
+|     FragmentComponent     |  Fragment#onAttach()   | Fragment#onDestroy() |
+|       ViewComponent       |      View#super()      |       View 已销毁       |
+| ViewWithFragmentComponent |      View#super()      |       View 已销毁       |
+|     ServiceComponent      |   Service#onCreate()   | Service#onDestroy()  |
+
+> 注意：ActivityRetainedComponent 在配置更改后仍然存在，因此它在第一次调用 Activity#onCreate()时创建，
+> 在最后一次调用 Activity#onDestroy() 时销毁。
+
+组件作用域
+
+|             Android 类             |           生成的组件           |           作用域           |
+|:---------------------------------:|:-------------------------:|:-----------------------:|
+|            Application            |    SingletonComponent     |       @Singleton        |
+|             Activity              | ActivityRetainedComponent | @ActivityRetainedScoped |
+|             ViewModel             |    ViewModelComponent     |    @ViewModelScoped     |
+|             Activity              |     ActivityComponent     |     @ActivityScoped     |
+|             Fragment              |     FragmentComponent     |     @FragmentScoped     |
+|               View                |       ViewComponent       |       @ViewScoped       |
+| 带有 @WithFragmentBindings 注解的 View | ViewWithFragmentComponent |       @ViewScoped       |
+|              Service              |     ServiceComponent      |     @ServiceScoped      |
+
+## kotlin协程
+
+## Flow
