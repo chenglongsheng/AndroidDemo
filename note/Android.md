@@ -875,3 +875,45 @@ Hilt 会按照相应 Android 类的生命周期自动创建和销毁生成的组
 ## kotlin协程
 
 ## Flow
+
+数据流在协程的基础上构建，异步计算一组数据序列，发出的值类型必须是相同的。
+
+由三个部分组成：生产者、中介、消费者
+
+生产者：通过flow构建一个数据流，通过emit发送数据
+
+中介：一系列操作符，就是函数处理数据
+
+消费者：通过collect函数收集数据，调用这个函数的协程可能会挂起，每个collect都会让生产的代码执行一次，也就是说数据不是共享的。
+使用共享数据需要使用sharedIn运算符
+
+第三方的数据流可能需要处理异常，使用catch操作符，在catch之后collect不会收集到新数据，
+所以在catch中可以使用emit发出新的数据提供给collect
+
+flow在不同的协程上下文中是不可用的，可以通过flowOn切换数据流处理的上下文
+例如：
+
+```kotlin
+class NewsRepository(
+    private val newsRemoteDataSource: NewsRemoteDataSource,
+    private val userData: UserData,
+    private val defaultDispatcher: CoroutineDispatcher
+) {
+    val favoriteLatestNews: Flow<List<ArticleHeadline>> =
+        newsRemoteDataSource.latestNews
+            .map { news -> // Executes on the default dispatcher
+                news.filter { userData.isFavoriteTopic(it) }
+            }
+            .onEach { news -> // Executes on the default dispatcher
+                saveInCache(news)
+            }
+            // flowOn affects the upstream flow ↑
+            .flowOn(defaultDispatcher)
+            // the downstream flow ↓ is not affected
+            .catch { exception -> // Executes in the consumer's context
+                emit(lastCachedNews())
+            }
+}
+```
+
+通过flowOn上游数据流都运行在defaultDispatcher，下游则是在Dispatcher.Main中
