@@ -917,3 +917,63 @@ class NewsRepository(
 ```
 
 通过flowOn上游数据流都运行在defaultDispatcher，下游则是在Dispatcher.Main中
+
+# Compose
+
+## 一些概念理解
+
+重要概念：
+
+- [Jetpack Compose 开发文档 | Android Developers (google.cn)](https://developer.android.google.cn/jetpack/compose/documentation?hl=zh-cn)
+
+幂等（idempotent、idempotence）是一个数学与计算机学概念，常见于抽象代数中。 在编程中一个幂等操作的特点是其
+**任意多次执行所产生的影响均与一次执行的影响相同**。 幂等函数，或幂等方法，是指可以使用相同参数重复执行，并能获得相同结果的函数。
+这些函数不会影响系统状态，也不用担心重复执行会对系统造成改变。
+
+在编程中，是指一个操作或者函数无论执行多少次结果都是相同的，无论执行多少次都不会又额外的影响或者效应。
+
+非幂等函数：
+
+```kotlin
+var a: Int = 1
+
+fun nonIdempotent() {
+    a++
+}
+```
+
+幂等函数：
+
+```kotlin
+fun idempotent(a: Int) = a + 1
+```
+
+给定参数不变，无论执行多少次结果都一样
+
+```kotlin
+fun idempotentOrNonIdempotent(a: Int): Int {
+    print("${a + 1}")
+    return a + 1
+}
+```
+
+影响了控制控，有附带效应
+
+`附带效应`是指发生在**可组合函数作用域**
+之外的应用状态的变化。由于可组合项的生命周期和属性（例如不可预测的重组、以不同顺序执行可组合项的重组或可以舍弃的重组），可组合项在理想情况下应该是无附带效应的。
+
+当前ui在某种变化时，需要修改超出自身作用域的变量状态，是为产生附带效应。
+
+在无返回值函数角度，作用域内的代码执行结束就函数生命就结束了，是以想要修改其他的ui状态，需要持有被改变对象引用
+
+### LaunchedEffect
+
+在重组函数中启动一个协程，在开始重组时启动，退出重组时结束。
+
+修改key值可以关闭并重启这个协程
+
+限制只能在重组函数中调用
+
+### rememberCoroutineScope
+
+创建一个跟随重组函数生命周期内的协程作用域，可以在非重组函数作用域内使用，例如在onClick回调中使用调用协程代码块
