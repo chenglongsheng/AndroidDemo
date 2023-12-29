@@ -16,5 +16,6 @@ rootProject.name = "AndroidDemo"
 include(":app")
 include(":widget")
 include(":multiprocess")
-include(":wanandroid")
 include(":message")
+include(":wanandroid")
+include(":wanandroid:app")
