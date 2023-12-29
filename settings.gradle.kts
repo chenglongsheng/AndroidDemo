@@ -13,9 +13,8 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "AndroidDemo"
-include ':app'
-include ':widget'
-include ':multiprocess'
-include ':toolbox'
-include ':wanandroid'
-include ':message'
+include(":app")
+include(":widget")
+include(":multiprocess")
+include(":wanandroid")
+include(":message")
