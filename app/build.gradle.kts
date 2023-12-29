@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "com.buyehou.demo"
-    compileSdk = 32
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.buyehou.demo"
-        minSdk = 23
-        targetSdk = 32
+        minSdk = 21
+        targetSdk = 34
         versionCode = 1
         versionName = "1.0"
     }
@@ -36,7 +36,6 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.10.0")
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
 
-    implementation(project(":widget"))
     implementation("androidx.core:core-ktx:1.10.1")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.9.0")
