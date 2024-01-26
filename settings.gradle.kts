@@ -12,7 +12,7 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "AndroidDemo"
+rootProject.name = "android-note"
 include(":app")
 include(":widget")
 include(":multiprocess")
