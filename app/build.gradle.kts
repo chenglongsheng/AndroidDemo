@@ -7,6 +7,8 @@ android {
     namespace = "com.buyehou.demo"
     compileSdk = 34
 
+    viewBinding.isEnabled = true
+
     defaultConfig {
         applicationId = "com.buyehou.demo"
         minSdk = 21
@@ -33,10 +35,12 @@ android {
 }
 
 dependencies {
-    implementation("com.squareup.okhttp3:okhttp:4.10.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    runtimeOnly("androidx.palette:palette-ktx:1.0.0")
+    implementation("androidx.palette:palette:1.0.0")
 
-    implementation("androidx.core:core-ktx:1.10.1")
+    implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.9.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
